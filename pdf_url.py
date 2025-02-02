@@ -6,12 +6,13 @@ from phi.knowledge.pdf import PDFUrlKnowledgeBase
 from phi.vectordb.pgvector import PgVector2
 import os
 from dotenv import load_dotenv
+from phi.tools.duckduckgo import DuckDuckGo
 
 load_dotenv()
 
 # Configure API keys
 groq_api_key = os.getenv("GROQ_API_KEY")
-openai_api_key = os.getenv("OPENAI_API_KEY")
+openai_api_key = os.getenv("OPEN_API_KEY")
 os.environ["GROQ_API"] = groq_api_key
 os.environ["OPENAI_API_KEY"] = openai_api_key
 
@@ -82,6 +83,7 @@ with st.sidebar:
                     user_id="user",
                     knowledge_base=knowledge_base,
                     storage=storage,
+                    tools=[DuckDuckGo()],  
                     show_tool_calls=True,
                     search_knowledge=True,
                     read_chat_history=True
@@ -108,19 +110,23 @@ if 'assistant' in st.session_state:
         st.chat_message("user").markdown(prompt)
         st.session_state.messages.append({"role": "user", "content": prompt})
 
-        # Generate and display assistant response
+    # Generate and display assistant response
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
-            full_response = ""
-            
             try:
-                for response_chunk in st.session_state['assistant'].chat(prompt):
-                    full_response += response_chunk
-                    message_placeholder.markdown(full_response + "▌")
-                message_placeholder.markdown(full_response)
-                st.session_state.messages.append({"role": "assistant", "content": full_response})
+                response_text = ""
+                with st.status("🔍 Searching for answer...") as status:
+                    for chunk in st.session_state['assistant'].chat(prompt):
+                        response_text += chunk
+                        # Check if response indicates web search is being used
+                        if "Searching the web" in chunk or "DuckDuckGo" in chunk:
+                            status.update(label="🌐 Searching web for additional information...")
+                        message_placeholder.markdown(response_text + "▌")
+                message_placeholder.markdown(response_text)
+                st.session_state.messages.append({"role": "assistant", "content": response_text})
             except Exception as e:
                 st.error(f"Error generating response: {str(e)}")
+
 else:
     st.info("👈 Please initialize the system first by loading a PDF in the sidebar")
 
